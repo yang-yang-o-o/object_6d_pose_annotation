@@ -1,16 +1,28 @@
 {
   "id": "20260725_object_sfm",
-  "title": "FoundationPose复现到object_6d_pose_annotation静物SfM",
+  "title": "FoundationPose→SfM→标注器→yolo6d_full→仓库 object_6d_pose_annotation",
   "created_at": "2026-07-25T17:35:00+08:00",
-  "updated_at": "2026-07-25T17:35:00+08:00",
+  "updated_at": "2026-07-26T17:35:00+08:00",
   "workspace_then": "/root/FoundationPose",
   "workspace_next": "/root/object_6d_pose_annotation",
-  "transcript_source": "/root/.cursor/projects/root-FoundationPose/agent-transcripts/3f554e37-285f-4338-bf67-1a1181d3732f/3f554e37-285f-4338-bf67-1a1181d3732f.jsonl",
+  "transcript_sources": [
+    "/root/.cursor/projects/root-FoundationPose/agent-transcripts/3f554e37-285f-4338-bf67-1a1181d3732f/3f554e37-285f-4338-bf67-1a1181d3732f.jsonl",
+    "/root/.cursor/projects/root-object-sfm/agent-transcripts/8e606d5f-f0a5-4dfb-b763-f08a70f0505a/8e606d5f-f0a5-4dfb-b763-f08a70f0505a.jsonl"
+  ],
+  "appended_sessions": [
+    {
+      "id": "8e606d5f-f0a5-4dfb-b763-f08a70f0505a",
+      "appended_at": "2026-07-26T17:35:00+08:00",
+      "note": "稠密/标注器/尺度贴齐/yolo6d_full/git+uv 仓库化；后续对话请新建 recap"
+    }
+  ],
   "topics": [
     "FoundationPose uv环境与demo",
-    "BundleSDF/RGB-only/FoundationStereo讨论",
-    "OnePose/OnePose++与YOLO6D标注路线",
-    "object_6d_pose_annotation: 静物绕拍+hloc SfM+尺度对齐"
+    "OnePose/YOLO6D 路线与 hloc SfM",
+    "run1 稠密 MVS 与 run2 取舍",
+    "浏览器 6D 标注器（SAM2、尺度、贴齐平面、快照导出）",
+    "全视频 hloc 定位 → yolo6d_full",
+    "仓库改名 object_6d_pose_annotation、gitignore、uv sync"
   ],
-  "resume_hint": "打开目录 /root/object_6d_pose_annotation，续聊时指定 .cursor/recaps/20260725_object_sfm/recap.md 或 transcript.jsonl"
+  "resume_hint": "打开 /root/object_6d_pose_annotation；精确续聊用本目录 transcript.jsonl，概括用 recap.md。新会话请新建 .cursor/recaps/<新id>/"
 }

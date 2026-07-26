@@ -2,63 +2,100 @@
 
 ## 背景目标
 
-- 原工作区：`/root/FoundationPose`（uv 环境跑通官方 demo，无头保存可视化）。
-- 新目标：用手机绕拍静物，**无 ARKit**，经 SfM + 已知长度定尺度，给帧打 6D，供后续 YOLO6D 训练。
-- 当前工程：`/root/object_6d_pose_annotation`（续聊请切到此目录）。
+- 原工作区：`/root/FoundationPose`（uv 跑通官方 demo）。
+- 目标：手机绕拍静物、**无 ARKit**，经 SfM + 米制尺度 + 浏览器 6D 标注 → YOLO6D（含全视频）。
+- 当前工程：`/root/object_6d_pose_annotation`（由 `object_sfm` 重命名）。
 
-## 关键决策
+## 关键决策（全程）
 
-1. **标注单目/本段绕拍视频**：不必硬走 BundleSDF→FoundationPose；FoundationPose 推理需要 depth。
-2. **OnePose++** 更贴「扫物体 + 标 RGB 视频」，但官方依赖 iOS Cap/ARKit；无 iOS 时用 **SfM + 已知尺寸定尺度** 替代位姿与米制。
-3. 只标本段建库视频时，**COLMAP/hloc SfM 位姿本身就是标签**；OnePose++ 更适合「建一次模型、批量标新视频」。
-4. 重建质量：采用 **hloc = SuperPoint + LightGlue + COLMAP**（对齐 OnePose 系深度特征思路），而非默认 SIFT。
+1. 标本段绕拍：用 **SfM 位姿 + 已知尺寸**，不必 BundleSDF→FoundationPose（推理要 depth）。
+2. 匹配：**hloc = SuperPoint + LightGlue + COLMAP**（对齐 OnePose 系深度特征思路）。
+3. 默认重建配置取 **run1**（1600 / 较快）；run2 原生 4K 太慢且结构收益有限。
+4. 稠密：CUDA COLMAP MVS（run1）可用；Depth-Anything 融合几何差，不用作主路径；OpenMVS 预编译纳入 `third_party/setup.sh`。
+5. 全视频标签：对每帧相对 SfM 做 **hloc 定位**（非插值），再投影静态 `object_frame`。
+6. 物体框约定：**+Z ∥ 桌面法向**，**−Z 面贴桌**；导出优先用 `quaternion_wxyz`。
+7. 仓库：大产物 gitignore；`.cursor` 入库；环境用 **uv sync**（`pyproject.toml` + `uv.lock`）。
 
-## FoundationPose 侧（已完成，可参考 docs/）
+## 阶段 A — FoundationPose（已完成）
 
-- 路径：`/root/FoundationPose`，venv：`.venv`，GPU：3080 Ti 12GB。
-- `run_demo.py`：无 `imshow`，保存 `track_vis/*.png` + mp4；支持 `--shorter_side`（driller 需 480 防 OOM）。
-- 文档：`docs/reproduction.md`、`docs/changelog_local.md`。
+- 路径：`/root/FoundationPose`，GPU：3080 Ti 12GB。
+- `run_demo.py` 无头保存可视化；文档见该仓库 `docs/`。
 
-## object_6d_pose_annotation 当前状态
+## 阶段 B — SfM / 稠密（已完成）
 
 | 项 | 内容 |
 |----|------|
-| 视频 | `data/VID_20260725_165829.mp4`（自 `~/VID_...` 移入），3840×2160，~1097 帧 |
-| 抽帧 | `data/frames/`，74 张，1600×900，~2 fps |
-| SfM | `outputs/run1/`，**74/74 注册**，8447 点，reproj≈1.33 px |
-| 导出 | `outputs/run1/export/`：`K.txt`、`obj_in_cam/`、`sparse.ply`、`camera.json` |
-| 稠密 | apt COLMAP 无 CUDA，`patch_match_stereo` 失败；打 6D 不依赖稠密 |
-| 尺度 | **未做**；需 MeshLab 点两点 + `apply_scale.py --real_length_m` |
+| 视频 | `data/VID_20260725_165829.mp4`，3840×2160，~1097 帧 |
+| 抽帧 | `data/frames/` 74 张 1600×900 @~2fps；`frames_native/` 同采样原生分辨率 |
+| SfM | `outputs/run1/sfm`，**74/74**，~8447 点 |
+| 稠密 | `outputs/run1/export/dense_mvs.ply`（CUDA COLMAP）；标注场景包用其降采样点云 |
 
-### 常用命令
+## 阶段 C — 浏览器标注器（已完成）
+
+路径：`tools/pose_annotator/`（`server.py`、`static/app.js`、`export_bridge.py`、`scale_bridge.py`、`segment.py`）。
+
+已实现要点：
+
+- 点云查看：轨道旋转、点大小、旋转中心（STR 等）。
+- 多视图 2D + **SAM2** 交互分割 → 前景点云交集 → AABB/OBB 初值 → TransformControls 精修。
+- 尺度：选点拟合平面 → 法向 offset → 选目标点 + 真实距离；`metric_applied` flag 防叠乘；「改单位 / 微调」分流。
+- **贴齐平面**、翻转 Z、绕局部 Z 相对旋转；侧栏欧拉 ↔ 3D 四元数双向同步；保存 `commitPoseForSave()` + `quaternion_wxyz`。
+- 导出：`annotator/`、`yolo6d/` **快照改名不覆盖**；导出后自动 `preview_6d.mp4`。
+
+当前最新标注（快照已删，只留最新）：
+
+- `outputs/run1/annotator/`、`outputs/run1/yolo6d/`
+- `|Z∠n| ≈ 0°`（以 quat 为准）
+
+## 阶段 D — 全视频 YOLO6D（已完成）
 
 ```bash
-cd ~/object_6d_pose_annotation && source .venv/bin/activate
-
-# 已跑过的 SfM
-bash scripts/run_sfm.sh
-
-# 定尺度（填真实长度与两点）
-python scripts/apply_scale.py \
-  --sfm_dir outputs/run1/sfm \
-  --out_dir outputs/run1/metric \
-  --p1 x1 y1 z1 --p2 x2 y2 z2 \
-  --real_length_m H
+uv run python scripts/localize_full_video.py --run outputs/run1 --skip_extract
 ```
 
-## 下一步（恢复后优先）
+- `outputs/run1/yolo6d_full/`：1097/1097 定位成功
+- `outputs/run1/yolo6d_full/preview_6d.mp4`
 
-1. 用户量物体真实高度/边长，在 `sparse.ply` 上取对应两点 → 跑 `apply_scale.py`。
-2. 定义物体坐标系（原点/轴向），把 `obj_in_cam` 变到约定物体框。
-3. （可选）提高抽帧：`--max_side 2400 --fps 3` 重跑 SfM。
-4. （可选）CUDA COLMAP / OpenMVS 做稠密。
-5. 导出 YOLO6D 标签格式；需要多背景时再拍 test 序列。
+## 阶段 E — 仓库化（已完成，待你首次 commit）
+
+- 目录名：`object_6d_pose_annotation`
+- ignore：`data/`、`outputs/`、`.venv/`、`models/*`、`third_party/*`（除脚本）、`__pycache__` 等
+- **跟踪** `.cursor/`、`scripts/`、`tools/`、`pyproject.toml`、`uv.lock`
+- `scripts/prepare_data.py`：提示/接收 MP4 → 生成 `data/`
+- `models/download.sh`：SAM2.1-t（ultralytics assets v8.4.0）
+- `third_party/setup.sh`：hloc `@c13273b` + OpenMVS **v2.4.0**
+- 已 `git init`（main），**尚未 commit**（按你要求自检后再提交）
+
+## 常用命令
+
+```bash
+cd /root/object_6d_pose_annotation
+unset VIRTUAL_ENV   # 若仍指向旧 object_sfm/.venv
+uv sync
+bash third_party/setup.sh
+bash models/download.sh
+
+uv run python scripts/prepare_data.py --video /path/to/orbit.mp4
+bash scripts/run_sfm.sh
+uv run python scripts/prepare_annotator_scene.py --run outputs/run1
+uv run python tools/pose_annotator/server.py --run outputs/run1
+uv run python scripts/localize_full_video.py --run outputs/run1 --skip_extract
+```
+
+## 下一步（可选）
+
+1. 你本地检查后做 **首次 git commit**（必要时加 remote）。
+2. 新需求 / 新会话：在 `.cursor/recaps/` **另建**条目，本条不再追加。
+3. 若换物体/视频：`prepare_data.py` → SfM → 标注 → `localize_full_video`。
 
 ## 续聊方式
 
-在 Cursor 打开 **`/root/object_6d_pose_annotation`**，并说明：
+精确（完整 log，含本续聊追加段）：
 
-> 精确续聊：`/root/object_6d_pose_annotation/.cursor/recaps/20260725_object_sfm/transcript.jsonl`  
-> 或概括续聊：`.../recap.md`
+`/root/object_6d_pose_annotation/.cursor/recaps/20260725_object_sfm/transcript.jsonl`
 
-快捷链接：`~/object_6d_pose_annotation_recap_latest` → 本目录。
+概括：
+
+`/root/object_6d_pose_annotation/.cursor/recaps/20260725_object_sfm/recap.md`
+
+子任务 log：`.../subagents/`
