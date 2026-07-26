@@ -1,0 +1,46 @@
+[project]
+name = "object-6d-pose-annotation"
+version = "0.1.0"
+description = "Phone orbit video → SfM → metric scale → browser 6D annotation → YOLO6D labels"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "torch==2.6.0",
+  "torchvision==0.21.0",
+  "numpy==2.4.4",
+  "opencv-python-headless==5.0.0.93",
+  "pillow==12.2.0",
+  "tqdm==4.69.1",
+  "pycolmap==4.1.1",
+  "kornia==0.8.3",
+  "matplotlib==3.11.1",
+  "trimesh==4.12.2",
+  "open3d==0.19.0",
+  "pyyaml==6.0.3",
+  "scipy==1.17.1",
+  "imageio==2.37.4",
+  "imageio-ffmpeg==0.6.0",
+  "ultralytics==8.4.105",
+  "h5py==3.16.0",
+  "gdown==6.1.0",
+  "plotly==6.9.0",
+  "lightglue",
+  "hloc",
+]
+
+[project.optional-dependencies]
+# Reserved for future extras
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+torchvision = { index = "pytorch-cu124" }
+lightglue = { git = "https://github.com/cvg/LightGlue", rev = "eb42fee2d71449efb0aa5c10549752b5d75384d8" }
+hloc = { git = "https://github.com/cvg/Hierarchical-Localization.git", rev = "c13273bd0ecc2917a35910fd843712a1c6243193" }
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true

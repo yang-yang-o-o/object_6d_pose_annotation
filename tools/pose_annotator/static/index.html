@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>object_sfm · 6D Pose Annotator</title>
+  <style>
+    :root {
+      --bg: #1a1b1e;
+      --panel: #25262b;
+      --text: #e8e8ea;
+      --muted: #9a9aa0;
+      --accent: #3b82f6;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --border: #3a3b42;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+      font: 13px/1.45 ui-sans-serif, system-ui, sans-serif; }
+    #layout { display: grid; grid-template-columns: 1fr 320px; height: 100%; }
+    #view { display: flex; flex-direction: column; overflow: hidden; background: #0f1012; }
+    #c3d { flex: 1 1 55%; min-height: 200px; width: 100%; display: block; }
+    #c3d:focus { outline: 1px solid var(--accent); outline-offset: -1px; }
+
+    #previews {
+      flex: 0 0 38%;
+      min-height: 180px;
+      display: flex;
+      gap: 0;
+      border-top: 1px solid var(--border);
+      overflow-x: auto;
+      overflow-y: hidden;
+      background: #0a0a0b;
+    }
+    .pv {
+      flex: 1 0 300px;
+      min-width: 260px;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: #000;
+      position: relative;
+    }
+    .pv.active { outline: 2px solid var(--accent); outline-offset: -2px; z-index: 1; }
+    .pv-bar {
+      flex: 0 0 30px;
+      display: flex; align-items: center; gap: 4px;
+      padding: 2px 6px; background: #1a1b1e; border-bottom: 1px solid var(--border);
+    }
+    .pv-bar select {
+      flex: 1; min-width: 0; background: #111; color: var(--text);
+      border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; font-size: 12px;
+    }
+    .pv-bar button {
+      width: auto; margin: 0; padding: 3px 7px; font-size: 11px; font-weight: 600;
+      border: 0; border-radius: 4px; background: #3a3b42; color: #fff; cursor: pointer;
+    }
+    .pv-bar button:hover { background: #4a4b52; }
+    .pv-stage {
+      flex: 1; position: relative; overflow: hidden; cursor: grab; background: #000;
+    }
+    .pv-stage.pick { cursor: crosshair; }
+    .pv-stage.panning { cursor: grabbing; }
+    .pv-stage img, .pv-stage canvas.ov {
+      position: absolute; left: 0; top: 0;
+      transform-origin: 0 0;
+      pointer-events: none;
+      user-select: none;
+    }
+    .pv-stage canvas.ov { z-index: 2; }
+    .pv-hint {
+      position: absolute; left: 6px; bottom: 4px; z-index: 3;
+      color: rgba(245,158,11,0.95); font-size: 11px; pointer-events: none;
+      text-shadow: 0 1px 2px #000;
+    }
+
+    #side { background: var(--panel); border-left: 1px solid var(--border); padding: 14px 16px;
+      overflow: auto; }
+    h1 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+    .sub { color: var(--muted); margin-bottom: 14px; }
+    label { display: block; color: var(--muted); margin: 10px 0 4px; }
+    input[type=number], select, input[type=text] {
+      width: 100%; background: #1a1b1e; color: var(--text); border: 1px solid var(--border);
+      border-radius: 6px; padding: 6px 8px;
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    button {
+      width: 100%; margin-top: 10px; padding: 9px 10px; border: 0; border-radius: 6px;
+      background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+    }
+    button.secondary { background: #3a3b42; }
+    button.mode-btn.active { background: var(--accent); }
+    button.pick-on { background: var(--warn); color: #111; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    #status { margin-top: 12px; color: var(--muted); white-space: pre-wrap; }
+    #status.ok { color: var(--ok); }
+    .hint { margin-top: 14px; color: var(--muted); font-size: 12px; }
+    kbd { background: #1a1b1e; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+    .sec { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .sec-title { font-weight: 600; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div id="layout">
+    <div id="view">
+      <canvas id="c3d" tabindex="0"></canvas>
+      <div id="previews"></div>
+    </div>
+    <aside id="side">
+      <h1>6D 物体框标注</h1>
+      <div class="sub">多视图分割 → OBB → 尺度标定 → 导出 YOLO6D</div>
+
+      <div class="sec" style="margin-top:0; padding-top:0; border-top:0">
+        <div class="sec-title">2D 多视图</div>
+        <div class="row2">
+          <button id="btnAddView" class="secondary" type="button" style="margin-top:0">＋ 添加视图</button>
+          <button id="btnRemoveView" class="secondary" type="button" style="margin-top:0">移除当前</button>
+        </div>
+        <div class="hint" style="margin-top:6px">滚轮缩放 · 中键/Alt+拖拽平移 · 点选时左键 FG / 右键 BG（SAM2）</div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title">交互前景提取</div>
+        <button id="btnPickFg" class="secondary" type="button">提取前景（点选模式）</button>
+        <div class="row2" style="margin-top:6px">
+          <button id="btnClearSeeds" class="secondary" type="button" style="margin-top:0">清除当前种子</button>
+          <button id="btnRestoreCloud" class="secondary" type="button" style="margin-top:0">恢复点云</button>
+        </div>
+        <div class="row2" style="margin-top:6px">
+          <button id="btnAABB" class="secondary" type="button" style="margin-top:0" disabled>AABB 拟合</button>
+          <button id="btnOBB" type="button" style="margin-top:0" disabled>OBB 拟合</button>
+        </div>
+        <div class="sec-title" style="margin-top:8px">贴齐平面（+Z 朝上）</div>
+        <div class="hint" style="margin-top:4px" id="alignPlaneHint">需先拟合桌面平面 · 约定 +Z∥法向，−Z 面贴桌</div>
+        <div class="row2" style="margin-top:6px">
+          <button id="btnAlignPlane" type="button" style="margin-top:0" disabled>贴齐平面</button>
+          <button id="btnUndoAlign" class="secondary" type="button" style="margin-top:0" disabled>撤销贴齐</button>
+        </div>
+        <div class="row2" style="margin-top:6px">
+          <button id="btnFlipZ" class="secondary" type="button" style="margin-top:0" disabled>翻转 Z</button>
+          <button id="btnGizmoLocal" class="secondary mode-btn active" type="button" style="margin-top:0">Gizmo: 局部</button>
+        </div>
+        <label style="margin-top:8px">绕局部 Z 旋转 (°，相对增量)</label>
+        <div class="row">
+          <input id="rzYaw" type="number" step="1" value="0" />
+          <button id="btnApplyYaw" class="secondary" type="button" style="margin-top:0">应用</button>
+          <button id="btnYawZero" class="secondary" type="button" style="margin-top:0">清零输入</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title">尺度标定（米）</div>
+        <button id="btnScaleLock" class="secondary pick-on" type="button">尺度锁定：开（仅微调）</button>
+        <div class="hint" style="margin-top:6px" id="scaleLockHint">锁定=单位固定为米，应用只做数值校正；解锁=允许改单位/整场景缩放</div>
+        <div class="row2" style="margin-top:6px">
+          <button id="btnPickPlane" class="secondary" type="button" style="margin-top:0">选平面点</button>
+          <button id="btnClearPlane" class="secondary" type="button" style="margin-top:0">清除平面</button>
+        </div>
+        <div class="row2" style="margin-top:6px">
+          <button id="btnFitPlane" class="secondary" type="button" style="margin-top:0" disabled>拟合平面</button>
+          <button id="btnPickTarget" class="secondary" type="button" style="margin-top:0" disabled>选目标点</button>
+        </div>
+        <label>法向 offset（SfM 单位，沿法向移动平面）</label>
+        <input id="planeOffset" type="number" step="0.001" value="0" />
+        <label>目标点 → 平面 真实距离 (m)</label>
+        <input id="realDist" type="number" step="0.001" min="0.001" placeholder="例如 0.12" />
+        <div id="scalePreview" class="hint" style="margin-top:8px">先选 ≥3 个桌面点拟合平面</div>
+        <button id="btnApplyScale" type="button" disabled>米制微调并导出 YOLO6D</button>
+      </div>
+
+      <label>类别 id / 名称</label>
+      <div class="row">
+        <input id="classId" type="number" value="0" step="1" />
+        <input id="className" type="text" value="object" style="grid-column: span 2" />
+      </div>
+
+      <label>中心 (SfM xyz)</label>
+      <div class="row">
+        <input id="cx" type="number" step="0.01" />
+        <input id="cy" type="number" step="0.01" />
+        <input id="cz" type="number" step="0.01" />
+      </div>
+
+      <label>欧拉角 XYZ (°)</label>
+      <div class="row">
+        <input id="rx" type="number" step="1" />
+        <input id="ry" type="number" step="1" />
+        <input id="rz" type="number" step="1" />
+      </div>
+
+      <label>尺寸 (sx sy sz)</label>
+      <div class="row">
+        <input id="sx" type="number" step="0.01" min="0.001" />
+        <input id="sy" type="number" step="0.01" min="0.001" />
+        <input id="sz" type="number" step="0.01" min="0.001" />
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button id="btnTranslate" class="secondary mode-btn" type="button" style="margin-top:0">平移 1</button>
+        <button id="btnRotate" class="secondary mode-btn" type="button" style="margin-top:0">旋转 2</button>
+        <button id="btnScale" class="secondary mode-btn" type="button" style="margin-top:0">缩放 3</button>
+      </div>
+      <button id="btnPivotBox" class="secondary" type="button">旋转中心 → 包围盒 (F)</button>
+      <button id="btnPivotScene" class="secondary" type="button">旋转中心 → 场景中心</button>
+      <button id="btnSave" type="button">保存并导出 YOLO6D（新建）</button>
+      <div id="status">加载中…</div>
+      <div class="hint">
+        <div>在 <b>不同视角</b> 各点一次前景；遮挡的背景点会在另一视角露出，多视图 <b>FG 交集</b> 去掉它们</div>
+        <div>尺度：3D 视图选桌面点 → 拟合平面 → 调法向 offset → 选目标点并输入真实高度 → 应用并导出</div>
+        <div>姿态：3D 框与侧栏欧拉角双向同步；贴齐/绕 Z/Gizmo 会更新侧栏，手改侧栏也会写回 3D 框</div>
+        <div>贴齐：+Z∥桌面法向、−Z 面贴桌；可翻转 Z / 绕 Z 旋转微调朝向</div>
+        <div>Gizmo：默认局部轴（与框面法向一致）· <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> · <kbd>P</kbd> 前景 · <kbd>F</kbd> 对准框</div>
+      </div>
+    </aside>
+  </div>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="/app.js?v=20260726-posesync"></script>
+</body>
+</html>

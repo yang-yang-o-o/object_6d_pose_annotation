@@ -1,0 +1,16 @@
+{
+  "id": "20260725_object_sfm",
+  "title": "FoundationPose复现到object_6d_pose_annotation静物SfM",
+  "created_at": "2026-07-25T17:35:00+08:00",
+  "updated_at": "2026-07-25T17:35:00+08:00",
+  "workspace_then": "/root/FoundationPose",
+  "workspace_next": "/root/object_6d_pose_annotation",
+  "transcript_source": "/root/.cursor/projects/root-FoundationPose/agent-transcripts/3f554e37-285f-4338-bf67-1a1181d3732f/3f554e37-285f-4338-bf67-1a1181d3732f.jsonl",
+  "topics": [
+    "FoundationPose uv环境与demo",
+    "BundleSDF/RGB-only/FoundationStereo讨论",
+    "OnePose/OnePose++与YOLO6D标注路线",
+    "object_6d_pose_annotation: 静物绕拍+hloc SfM+尺度对齐"
+  ],
+  "resume_hint": "打开目录 /root/object_6d_pose_annotation，续聊时指定 .cursor/recaps/20260725_object_sfm/recap.md 或 transcript.jsonl"
+}

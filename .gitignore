@@ -1,0 +1,39 @@
+# Python / env
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local data & run outputs (regenerate via scripts)
+data/
+outputs/
+logs/
+
+# Model weights (fetch via models/download.sh)
+models/*
+!models/download.sh
+
+# third_party artifacts (fetch via third_party/setup.sh)
+third_party/*
+!third_party/setup.sh
+
+# Large / binary caches that may appear outside outputs/
+*.mp4
+*.h5
+*.pt
+*.bin
+*.ply
+
+# OS / editor noise (.cursor is tracked on purpose)
+.DS_Store
+Thumbs.db
+*.swp
+*~
