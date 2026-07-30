@@ -1,0 +1,19 @@
+{
+  "id": "20260726_yolo6d_sam2_masks",
+  "title": "YOLO6D mask：交互 dump → SAM2 时序传播 → preview_mask",
+  "created_at": "2026-07-26T19:16:00+08:00",
+  "updated_at": "2026-07-26T20:47:00+08:00",
+  "workspace": "/root/ultralytics/projects/object_6d_pose_annotation",
+  "parent_recap": "20260725_object_sfm",
+  "transcript_sources": [
+    "/root/.cursor/projects/root/agent-transcripts/4784ba15-7ac2-439d-a305-ab06a5a3211f/4784ba15-7ac2-439d-a305-ab06a5a3211f.jsonl"
+  ],
+  "topics": [
+    "yolo6d / yolo6d_full 增加 mask/",
+    "标注器按帧 dump annotator/masks/{stem}.png",
+    "Ultralytics SAM2 时序传播 + 去噪",
+    "preview_mask.mp4 自动生成",
+    "uv/.venv：清华源、排除 opencv-python（仅 headless）"
+  ],
+  "resume_hint": "概括用本目录 recap.md；精确用 transcript.jsonl。前置背景见 ../20260725_object_sfm/"
+}

@@ -334,7 +334,7 @@ function createView(frameIndex = 0) {
     v.zoom = 1;
     v.panX = 0;
     v.panY = 0;
-    loadViewImage(v);
+    loadViewImage(v).then(() => tryLoadSavedMask(v));
     applyMultiViewFilter();
   });
   btnReset.addEventListener("click", () => {
@@ -347,7 +347,7 @@ function createView(frameIndex = 0) {
   bindViewInteractions(v);
   views.push(v);
   setActiveView(v.id);
-  loadViewImage(v);
+  loadViewImage(v).then(() => tryLoadSavedMask(v));
   return v;
 }
 
@@ -368,8 +368,39 @@ function removeActiveView() {
 function loadViewImage(v) {
   const fr = sceneData.frames[v.frameIndex];
   const src = fr.image_rel.startsWith("frames/") ? "/" + fr.image_rel : fr.image_rel;
-  v.img.onload = () => layoutView(v);
-  v.img.src = src;
+  return new Promise((resolve) => {
+    const done = () => {
+      layoutView(v);
+      resolve();
+    };
+    if (v.img.src.endsWith(src) || v.img.getAttribute("src") === src) {
+      if (v.img.complete && v.img.naturalWidth) {
+        done();
+        return;
+      }
+    }
+    v.img.onload = done;
+    v.img.onerror = () => resolve();
+    v.img.src = src;
+  });
+}
+
+async function tryLoadSavedMask(v) {
+  try {
+    const res = await fetch(`/api/mask?frame_index=${v.frameIndex}`);
+    const data = await res.json();
+    if (!data.ok || !data.mask_png_b64) return false;
+    const decoded = await decodeMaskPngB64(data.mask_png_b64);
+    v.maskU8 = decoded.maskU8;
+    v.maskTint = decoded.tint;
+    v.maskW = decoded.w;
+    v.maskH = decoded.h;
+    drawViewOverlay(v);
+    applyMultiViewFilter();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Fit image into stage with contain, then apply zoom/pan */
@@ -813,7 +844,8 @@ async function runSegmentForView(v) {
     applyMultiViewFilter();
     const ms = data.infer_s != null ? ` · ${data.infer_s}s` : "";
     const np = data.n_fg != null ? ` · FG${data.n_fg}/BG${data.n_bg}` : "";
-    setStatus(`SAM2 完成${ms}${np} · ${data.fg_pixels ?? "?"} px · FG∩ 已更新`, true);
+    const dumped = data.mask_path ? ` · 已存 ${data.mask_path}` : "";
+    setStatus(`SAM2 完成${ms}${np}${dumped} · ${data.fg_pixels ?? "?"} px · FG∩ 已更新`, true);
   } catch (e) {
     setStatus("SAM2 分割失败: " + e.message);
   } finally {
@@ -1083,8 +1115,8 @@ function applyLocalYaw(deg) {
   const alignErr = planeAlignErrorDeg();
   const tip =
     alignErr != null
-      ? ` · 当前|Z∠法向|=${alignErr.toFixed(1)}°（保存后看 yolo6d/preview_6d.mp4）`
-      : " · 保存后看 yolo6d/preview_6d.mp4";
+      ? ` · 当前|Z∠法向|=${alignErr.toFixed(1)}°（保存后看 yolo6d/preview_6d.mp4 · preview_mask.mp4）`
+      : " · 保存后看 yolo6d/preview_6d.mp4 · preview_mask.mp4";
   setStatus(`已绕局部 Z 旋转 ${d}°${tip}`, true);
 }
 
@@ -2043,7 +2075,7 @@ $("btnSave").addEventListener("click", async () => {
     setStatus(`保存/导出失败: ${data.export_error || "unknown"}`);
   } else {
     const parts = [
-      `新结果在 yolo6d/preview_6d.mp4 · ${data.labels} 标签` +
+      `新结果在 yolo6d/preview_6d.mp4 · preview_mask.mp4 · ${data.labels} 标签` +
         (alignErr != null ? ` · |Z∠n|=${alignErr.toFixed(1)}°` : ""),
     ];
     if (data.annotator_snap) {

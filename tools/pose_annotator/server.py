@@ -12,7 +12,7 @@ import json
 import mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -76,6 +76,38 @@ class Handler(BaseHTTPRequestHandler):
             if not p.exists():
                 return self._send(404, b"{}", "application/json")
             return self._send(200, p.read_bytes(), "application/json")
+        if path == "/api/mask":
+            # GET ?frame_index=N → load dumped interactive mask for that keyframe
+            try:
+                from segment import mask_to_png_b64
+                import cv2
+
+                qs = parse_qs(urlparse(self.path).query)
+                frame_i = int((qs.get("frame_index") or ["0"])[0])
+                sc = json.loads((self.run_dir / "annotator" / "scene.json").read_text())
+                fr = sc["frames"][frame_i]
+                stem = str(fr.get("stem") or Path(fr["image"]).stem)
+                mask_path = self.run_dir / "annotator" / "masks" / f"{stem}.png"
+                if not mask_path.exists():
+                    body = json.dumps({"ok": False, "stem": stem, "error": "no_mask"}).encode()
+                    return self._send(200, body, "application/json")
+                m = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+                if m is None:
+                    raise RuntimeError(f"Cannot read mask: {mask_path}")
+                fg = (m > 127).astype("uint8")
+                msg = {
+                    "ok": True,
+                    "stem": stem,
+                    "mask_path": f"masks/{stem}.png",
+                    "mask_png_b64": mask_to_png_b64(fg),
+                    "fg_pixels": int(fg.sum()),
+                    "width": int(fg.shape[1]),
+                    "height": int(fg.shape[0]),
+                }
+            except Exception as e:
+                msg = {"ok": False, "error": str(e)}
+            body = json.dumps(msg).encode()
+            return self._send(200, body, "application/json")
         if path.startswith("/frames/"):
             name = Path(path).name
             fp = self.images_dir / name
@@ -111,11 +143,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/segment":
             data = self._read_json()
             try:
-                from segment import mask_to_png_b64, segment_sam2
+                from segment import mask_to_png_b64, save_mask_png, segment_sam2
 
                 frame_i = int(data.get("frame_index", 0))
                 sc = json.loads((self.run_dir / "annotator" / "scene.json").read_text())
                 fr = sc["frames"][frame_i]
+                stem = str(fr.get("stem") or Path(fr["image"]).stem)
                 img_path = Path(fr["image"])
                 if not img_path.exists():
                     name = Path(fr.get("image_rel", "")).name
@@ -123,13 +156,15 @@ class Handler(BaseHTTPRequestHandler):
                 fg = data.get("fg") or []
                 bg = data.get("bg") or []
                 mask, info = segment_sam2(img_path, fg, bg)
-                cache = self.run_dir / "annotator" / "last_mask.png"
-                import cv2
-
-                cv2.imwrite(str(cache), mask * 255)
+                ann = self.run_dir / "annotator"
+                # Per-frame dump (all interactive SAM2 views) + legacy last_mask
+                per_frame = save_mask_png(ann / "masks" / f"{stem}.png", mask)
+                save_mask_png(ann / "last_mask.png", mask)
                 msg = {
                     "ok": True,
                     "mask_png_b64": mask_to_png_b64(mask),
+                    "stem": stem,
+                    "mask_path": str(per_frame.relative_to(ann)),
                     **info,
                 }
             except Exception as e:

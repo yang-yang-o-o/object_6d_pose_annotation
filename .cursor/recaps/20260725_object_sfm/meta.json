@@ -4,7 +4,7 @@
   "created_at": "2026-07-25T17:35:00+08:00",
   "updated_at": "2026-07-26T17:35:00+08:00",
   "workspace_then": "/root/FoundationPose",
-  "workspace_next": "/root/object_6d_pose_annotation",
+  "workspace_next": "/root/ultralytics/projects/object_6d_pose_annotation",
   "transcript_sources": [
     "/root/.cursor/projects/root-FoundationPose/agent-transcripts/3f554e37-285f-4338-bf67-1a1181d3732f/3f554e37-285f-4338-bf67-1a1181d3732f.jsonl",
     "/root/.cursor/projects/root-object-sfm/agent-transcripts/8e606d5f-f0a5-4dfb-b763-f08a70f0505a/8e606d5f-f0a5-4dfb-b763-f08a70f0505a.jsonl"
@@ -24,5 +24,5 @@
     "全视频 hloc 定位 → yolo6d_full",
     "仓库改名 object_6d_pose_annotation、gitignore、uv sync"
   ],
-  "resume_hint": "打开 /root/object_6d_pose_annotation；精确续聊用本目录 transcript.jsonl，概括用 recap.md。新会话请新建 .cursor/recaps/<新id>/"
+  "resume_hint": "打开 /root/ultralytics/projects/object_6d_pose_annotation。本条为历史主线；mask/SAM2 时序增量见 ../20260726_yolo6d_sam2_masks/。精确续聊用对应目录 transcript.jsonl，概括用 recap.md。"
 }

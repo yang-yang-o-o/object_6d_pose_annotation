@@ -17,6 +17,7 @@ Outputs:
   outputs/run1/yolo6d_full/
     rgb/ full_XXXXXX.jpg
     labels/ full_XXXXXX.txt
+    mask/ full_XXXXXX.png        # OBB silhouette (YOLO6D-style)
     poses_w2c/ full_XXXXXX.txt   # metric
     localize_meta.json
 """
@@ -35,7 +36,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "third_party" / "Hierarchical-Localization"))
 sys.path.insert(0, str(ROOT / "tools" / "pose_annotator"))
 
-from export_bridge import obj_to_world, project, write_box_ply  # noqa: E402
+from export_bridge import (  # noqa: E402
+    ensure_yolo6d_mask_preview,
+    ensure_yolo6d_preview,
+    obj_to_world,
+    project,
+    resolve_frame_mask,
+    write_box_ply,
+    write_mask_png,
+)
 
 
 def parse_args():
@@ -328,31 +337,37 @@ def main():
         kf_w2c_sfm[im.name] = rigid3d_to_w2c(im.cam_from_world())
 
     _, _, pts9_w = obj_to_world(frame_obj)  # metric
+    corners_w = pts9_w[1:]
     class_id = int(frame_obj.get("class_id", 0))
 
     out = (args.out_dir or (run / "yolo6d_full")).resolve()
     rgb_dir = out / "rgb"
     lab_dir = out / "labels"
+    mask_dir = out / "mask"
     pose_dir = out / "poses_w2c"
-    for d in (rgb_dir, lab_dir, pose_dir):
+    for d in (rgb_dir, lab_dir, mask_dir, pose_dir):
         d.mkdir(parents=True, exist_ok=True)
 
-    print("\n[4/4] Export YOLO6D labels …", flush=True)
+    print("\n[4/4] Export YOLO6D labels + SAM2 masks …", flush=True)
     train_list = []
     n_ok = 0
     n_fail = 0
     n_from_kf = 0
     failed = []
+    mask_sources: dict[str, int] = {}
+    interactive_masks = run / "annotator" / "masks"
 
     for v, qname in tqdm(mapping, desc="export"):
         # Prefer exact keyframe pose when video index lands on a keyframe
         k_exact = v // step if (v % step == 0 and (v // step) < n_kf) else None
         w2c_sfm = None
         src = "loc"
+        kf_stem = None
         if k_exact is not None:
             w2c_sfm = kf_w2c_sfm[kf_names[k_exact]]
             src = "keyframe"
             n_from_kf += 1
+            kf_stem = Path(kf_names[k_exact]).stem
         elif qname in poses_sfm:
             w2c_sfm = poses_sfm[qname]
         else:
@@ -362,6 +377,7 @@ def main():
             src = "fallback_kf"
             n_fail += 1
             failed.append({"frame": v, "name": qname, "fallback": kf_names[ki]})
+            kf_stem = Path(kf_names[ki]).stem
 
         w2c = w2c_sfm.copy()
         w2c[:3, 3] *= metric_scale
@@ -384,6 +400,21 @@ def main():
         (lab_dir / f"{stem}.txt").write_text(
             label_line(class_id, uv, W, H) + "\n", encoding="utf-8"
         )
+        alt_stems = [kf_stem] if kf_stem else None
+        mask_u8, src_tag = resolve_frame_mask(
+            stem=stem,
+            image_path=dst_img if dst_img.exists() else src_img,
+            K=K,
+            w2c=w2c,
+            corners_w=corners_w,
+            width=W,
+            height=H,
+            interactive_mask_dir=interactive_masks,
+            interactive_stems=alt_stems,
+        )
+        write_mask_png(mask_dir / f"{stem}.png", mask_u8)
+        key = src_tag.split(":")[0]
+        mask_sources[key] = mask_sources.get(key, 0) + 1
         np.savetxt(pose_dir / f"{stem}.txt", w2c)
         train_list.append(f"rgb/{qname}")
         n_ok += 1
@@ -410,11 +441,22 @@ def main():
         "n_from_keyframe_exact": n_from_kf,
         "n_failed_or_fallback": n_fail,
         "localized_raw": len(poses_sfm),
+        "mask_sources": mask_sources,
         "failed": failed[:50],
         "out_dir": str(out),
     }
     (out / "localize_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     (loc_dir / "localize_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    try:
+        p6 = ensure_yolo6d_preview(out, force=True)
+        print(f"[preview] {p6}")
+    except Exception as e:
+        print(f"[preview] preview_6d.mp4 failed: {e}")
+    try:
+        pm = ensure_yolo6d_mask_preview(out, force=True)
+        print(f"[preview] {pm}")
+    except Exception as e:
+        print(f"[preview] preview_mask.mp4 failed: {e}")
     print(json.dumps({k: v for k, v in meta.items() if k != "failed"}, indent=2))
     print(f"\nDone → {out}  ({n_ok} labels)")
 

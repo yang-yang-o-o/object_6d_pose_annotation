@@ -15,6 +15,7 @@ Outputs:
   outputs/run1/yolo6d_full/
     rgb/frame_XXXXXX.jpg   # resized to SfM K resolution
     labels/frame_XXXXXX.txt
+    mask/frame_XXXXXX.png  # OBB silhouette (YOLO6D-style)
     train.txt / test.txt
     poses_w2c/frame_XXXXXX.txt
     densify_meta.json
@@ -33,7 +34,15 @@ from tqdm import tqdm
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "pose_annotator"))
-from export_bridge import obj_to_world, project, write_box_ply  # noqa: E402
+from export_bridge import (  # noqa: E402
+    ensure_yolo6d_mask_preview,
+    ensure_yolo6d_preview,
+    obj_to_world,
+    project,
+    resolve_frame_mask,
+    write_box_ply,
+    write_mask_png,
+)
 
 
 def parse_args():
@@ -127,14 +136,16 @@ def main():
         raise SystemExit("Need ≥2 keyframes to interpolate")
 
     _, _, pts9_w = obj_to_world(frame_obj)
+    corners_w = pts9_w[1:]
     class_id = int(frame_obj.get("class_id", 0))
 
     out = args.out_dir or (run / "yolo6d_full")
     out = out.resolve()
     rgb_dir = out / "rgb"
     lab_dir = out / "labels"
+    mask_dir = out / "mask"
     pose_dir = out / "poses_w2c"
-    for d in (rgb_dir, lab_dir, pose_dir):
+    for d in (rgb_dir, lab_dir, mask_dir, pose_dir):
         d.mkdir(parents=True, exist_ok=True)
 
     cap = cv2.VideoCapture(str(video))
@@ -199,6 +210,17 @@ def main():
         (lab_dir / f"{stem}.txt").write_text(
             label_line(class_id, uv, W, H) + "\n", encoding="utf-8"
         )
+        mask_u8, _src = resolve_frame_mask(
+            stem=stem,
+            image_path=rgb_dir / f"{stem}.jpg",
+            K=K,
+            w2c=w2c,
+            corners_w=corners_w,
+            width=W,
+            height=H,
+            interactive_mask_dir=run / "annotator" / "masks",
+        )
+        write_mask_png(mask_dir / f"{stem}.png", mask_u8)
         np.savetxt(pose_dir / f"{stem}.txt", w2c)
         train_list.append(f"rgb/{stem}.jpg")
         n_ok += 1
@@ -235,6 +257,16 @@ def main():
         "object_frame": str(ann / "object_frame.json"),
     }
     (out / "densify_meta.json").write_text(json.dumps(densify_meta, indent=2), encoding="utf-8")
+    try:
+        p6 = ensure_yolo6d_preview(out, force=True)
+        print(f"[preview] {p6}")
+    except Exception as e:
+        print(f"[preview] preview_6d.mp4 failed: {e}")
+    try:
+        pm = ensure_yolo6d_mask_preview(out, force=True)
+        print(f"[preview] {pm}")
+    except Exception as e:
+        print(f"[preview] preview_mask.mp4 failed: {e}")
     print(json.dumps(densify_meta, indent=2))
     print(f"\nWrote {n_ok} labels → {out}")
 

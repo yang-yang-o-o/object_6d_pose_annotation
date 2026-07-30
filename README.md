@@ -2,10 +2,14 @@
 
 手机绕拍静物视频 → SfM（hloc: SuperPoint + LightGlue）→ 已知长度定米制尺度 → 浏览器标注物体 6D 框 → 导出 YOLO6D 标签（含全视频定位）。
 
+本目录位于 Ultralytics 仓库的 `projects/object_6d_pose_annotation/`，与库代码/训练脚本一起管理；**独立 `pyproject.toml` / `.venv`（Python 3.11）**，不要与仓库根目录的 Ultralytics `.venv`（3.12）混用。
+
+下游训练数据配置：`ultralytics/cfg/datasets/yolo6d-full-seg6d.yaml`；示例脚本：`examples/yolo6d_full_seg6d_*.py`。
+
 ## 目录
 
 ```
-object_6d_pose_annotation/
+ultralytics/projects/object_6d_pose_annotation/
   data/                         # gitignore — 用 scripts/prepare_data.py 生成
   models/download.sh            # 拉取 SAM2 权重（权重本身 gitignore）
   outputs/                      # gitignore — SfM / 标注 / YOLO6D 产物
@@ -20,7 +24,7 @@ object_6d_pose_annotation/
 系统依赖：`ffmpeg`、`colmap`（稠密 CUDA MVS 另需 CUDA 版 COLMAP，可选）、`curl`、`git`、`unzip`、[`uv`](https://github.com/astral-sh/uv)。
 
 ```bash
-cd /path/to/object_6d_pose_annotation
+cd /root/ultralytics/projects/object_6d_pose_annotation
 uv sync                          # 按 pyproject.toml / uv.lock 建 .venv（含 torch cu124、hloc、lightglue）
 bash third_party/setup.sh        # Hierarchical-Localization @ c13273b + OpenMVS v2.4.0
 bash models/download.sh          # models/sam2.1_t.pt
@@ -111,7 +115,7 @@ uv run python scripts/localize_full_video.py --run outputs/run1 --skip_extract
 
 ## 会话复盘（续聊）
 
-仓库内保留 Cursor 复盘，便于管理与续作：
+本子项目内保留 Cursor 复盘，便于管理与续作：
 
 - 概括：`.cursor/recaps/20260725_object_sfm/recap.md`
 - 完整 log：`.cursor/recaps/20260725_object_sfm/transcript.jsonl`

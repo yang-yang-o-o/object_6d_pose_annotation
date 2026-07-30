@@ -4,7 +4,7 @@
 
 - 原工作区：`/root/FoundationPose`（uv 跑通官方 demo）。
 - 目标：手机绕拍静物、**无 ARKit**，经 SfM + 米制尺度 + 浏览器 6D 标注 → YOLO6D（含全视频）。
-- 当前工程：`/root/object_6d_pose_annotation`（由 `object_sfm` 重命名）。
+- 当前工程：`/root/ultralytics/projects/object_6d_pose_annotation`（由 `object_sfm` 重命名）。
 
 ## 关键决策（全程）
 
@@ -69,7 +69,7 @@ uv run python scripts/localize_full_video.py --run outputs/run1 --skip_extract
 ## 常用命令
 
 ```bash
-cd /root/object_6d_pose_annotation
+cd /root/ultralytics/projects/object_6d_pose_annotation
 unset VIRTUAL_ENV   # 若仍指向旧 object_sfm/.venv
 uv sync
 bash third_party/setup.sh
@@ -92,10 +92,10 @@ uv run python scripts/localize_full_video.py --run outputs/run1 --skip_extract
 
 精确（完整 log，含本续聊追加段）：
 
-`/root/object_6d_pose_annotation/.cursor/recaps/20260725_object_sfm/transcript.jsonl`
+`/root/ultralytics/projects/object_6d_pose_annotation/.cursor/recaps/20260725_object_sfm/transcript.jsonl`
 
 概括：
 
-`/root/object_6d_pose_annotation/.cursor/recaps/20260725_object_sfm/recap.md`
+`/root/ultralytics/projects/object_6d_pose_annotation/.cursor/recaps/20260725_object_sfm/recap.md`
 
 子任务 log：`.../subagents/`
